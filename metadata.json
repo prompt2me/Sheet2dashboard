@@ -1,0 +1,6 @@
+{
+  "name": "Sheet2Dashboard",
+  "description": "Production-grade business intelligence platform turning CSVs, XLSX, text tables, and images into professional formula-driven Excel dashboards with native charts and deep quality audits.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

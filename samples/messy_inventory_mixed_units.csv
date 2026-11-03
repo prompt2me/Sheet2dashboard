@@ -1,0 +1,16 @@
+SKU_Code,Item_Description,Warehouse_Bay,Unit_Of_Measure,Quantity_On_Hand,Unit_Cost,Total_Valuation,Spike_Flag
+STL-101,Structural Steel Beams,Bay A-1,bars,120,$45.00,$5400.00,Normal
+STL-102,Sheet Metal 2mm,Bay A-2,sheets,450,$22.50,$10125.00,Normal
+COP-201,Copper Wire 100m,Bay B-1,rolls,85,$110.00,$9350.00,Normal
+ALU-301,Aluminum Ingot,Bay B-3,kg,2400,$4.20,$10080.00,Normal
+STL-103,Heavy Steel Plates,Bay A-3,sheets,60,$320.00,$19200.00,Normal
+COP-202,Copper Tubing,Bay B-2,bars,310,$38.00,$11780.00,Normal
+RUB-401,Industrial Rubber Seal,Bay C-1,rolls,180,$18.50,$3330.00,Normal
+PLT-501,Polymer Granules,Bay C-2,kg,5200,$2.10,$10920.00,Normal
+STL-999,Prototype Titanium Bar,Bay A-1,bars,8,$9500.00,$76000.00,OUTLIER_SPIKE
+ALU-302,Extruded Aluminum Angle,Bay B-4,bars,540,$14.00,$7560.00,Normal
+COP-203,Grounding Wire,Bay B-1,rolls,95,$62.00,$5890.00,Normal
+RUB-402,High Temp Gaskets,Bay C-3,sheets,340,$9.80,$3332.00,Normal
+STL-104,Reinforcing Rebar,Bay A-4,bars,820,$16.50,$13530.00,Normal
+ALU-303,Aluminum Foil Industrial,Bay B-5,rolls,120,$75.00,$9000.00,Normal
+PLT-502,Reinforced Epoxy Resin,Bay C-4,kg,1800,$8.50,$15300.00,Normal

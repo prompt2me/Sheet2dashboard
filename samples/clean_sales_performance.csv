@@ -1,0 +1,23 @@
+Date,Region,Sales_Rep,Product_Category,Units_Sold,Revenue,Target_Revenue,Margin_Pct
+2025-01-05,North America,Sarah Jenkins,Cloud Services,140,42000,38000,28.5%
+2025-01-08,Europe,Lucas Meyer,Hardware Systems,45,67500,60000,22.0%
+2025-01-12,Asia Pacific,Kenji Sato,Cloud Services,180,54000,50000,31.0%
+2025-01-15,Latin America,Elena Gomez,Software Licenses,95,28500,30000,35.2%
+2025-01-19,North America,Sarah Jenkins,Software Licenses,110,33000,32000,34.0%
+2025-01-23,Europe,Lucas Meyer,Cloud Services,130,39000,40000,29.5%
+2025-01-27,Asia Pacific,Kenji Sato,Hardware Systems,38,57000,52000,21.5%
+2025-02-02,North America,Marcus Vance,Consulting,75,26250,25000,42.0%
+2025-02-06,Europe,Lucas Meyer,Software Licenses,125,37500,35000,36.0%
+2025-02-10,Asia Pacific,Mei Ling,Cloud Services,210,63000,55000,30.5%
+2025-02-14,Latin America,Elena Gomez,Hardware Systems,52,78000,70000,23.5%
+2025-02-18,North America,Sarah Jenkins,Hardware Systems,60,90000,85000,24.0%
+2025-02-22,Europe,Anna Weber,Consulting,90,31500,28000,44.5%
+2025-02-26,Asia Pacific,Kenji Sato,Software Licenses,160,48000,45000,33.5%
+2025-03-02,North America,Marcus Vance,Cloud Services,155,46500,42000,29.0%
+2025-03-06,Latin America,Elena Gomez,Consulting,65,22750,24000,41.0%
+2025-03-10,Europe,Lucas Meyer,Hardware Systems,48,72000,68000,22.5%
+2025-03-14,Asia Pacific,Mei Ling,Consulting,85,29750,27000,43.0%
+2025-03-18,North America,Sarah Jenkins,Cloud Services,190,57000,50000,30.0%
+2025-03-22,Europe,Anna Weber,Software Licenses,140,42000,38000,35.0%
+2025-03-26,Asia Pacific,Kenji Sato,Hardware Systems,42,63000,58000,22.0%
+2025-03-30,North America,Marcus Vance,Software Licenses,130,39000,36000,34.5%
