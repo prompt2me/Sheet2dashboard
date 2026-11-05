@@ -7,6 +7,10 @@ import { StepContentBuilder } from './components/StepContentBuilder';
 import { StepPreview } from './components/StepPreview';
 import { StepExportQA } from './components/StepExportQA';
 import { SubscriptionModal } from './components/SubscriptionModal';
+import { GmailIntegrationModal } from './components/GmailIntegrationModal';
+import { SubscriberRecord, sendGmailMessage, buildSubscriberEmailHtml } from './utils/gmailService';
+import { initAuth, getAccessToken } from './utils/firebaseAuth';
+import { User } from 'firebase/auth';
 
 import {
   ColumnProfile,
@@ -27,6 +31,50 @@ export default function App() {
   const [isSubscribed, setIsSubscribed] = useState<boolean>(
     () => localStorage.getItem('sheet2dashboard_subscribed') === 'true'
   );
+
+  // Gmail & Subscribers state
+  const [showGmailModal, setShowGmailModal] = useState<boolean>(false);
+  const [gmailUser, setGmailUser] = useState<User | null>(null);
+  const [hasGmailToken, setHasGmailToken] = useState<boolean>(false);
+  const [subscribers, setSubscribers] = useState<SubscriberRecord[]>(() => {
+    try {
+      const stored = localStorage.getItem('sheet2dashboard_subscribers');
+      if (stored) return JSON.parse(stored);
+      // Seed with previous subscriber if exists
+      const existingEmail = localStorage.getItem('sheet2dashboard_subscriber_email');
+      if (existingEmail) {
+        return [
+          {
+            id: 'sub_seed',
+            name: localStorage.getItem('sheet2dashboard_subscriber_name') || 'Valued Subscriber',
+            email: existingEmail,
+            timestamp: new Date().toISOString(),
+            sentToGmail: false,
+          },
+        ];
+      }
+    } catch {
+      // fallback
+    }
+    return [];
+  });
+
+  // Initialize Firebase Auth listener for Google Account
+  React.useEffect(() => {
+    const unsub = initAuth(
+      (user, token) => {
+        setGmailUser(user);
+        setHasGmailToken(Boolean(token));
+      },
+      () => {
+        setGmailUser(null);
+        setHasGmailToken(false);
+      }
+    );
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, []);
 
   // Raw dataset state
   const [filename, setFilename] = useState<string>('');
@@ -237,12 +285,55 @@ export default function App() {
       {/* Mandatory Subscription Pop-up Modal ("Stay with us ! / subscribe to us and get the last update.") */}
       <SubscriptionModal
         isOpen={!isSubscribed}
-        onSubscribed={(email, name) => {
+        onSubscribed={async (email, name) => {
           localStorage.setItem('sheet2dashboard_subscribed', 'true');
           localStorage.setItem('sheet2dashboard_subscriber_email', email);
           if (name) localStorage.setItem('sheet2dashboard_subscriber_name', name);
           setIsSubscribed(true);
+
+          const newSub: SubscriberRecord = {
+            id: 'sub_' + Date.now(),
+            name: name || '',
+            email,
+            timestamp: new Date().toISOString(),
+            sentToGmail: false,
+          };
+
+          const updated = [newSub, ...subscribers.filter((s) => s.email !== email)];
+          setSubscribers(updated);
+          localStorage.setItem('sheet2dashboard_subscribers', JSON.stringify(updated));
+
+          // If auto-forward to Gmail is enabled and an active OAuth token exists, send immediate notification
+          const autoSend = localStorage.getItem('sheet2dashboard_auto_email_subscribers') === 'true';
+          const token = await getAccessToken();
+          const recipient = localStorage.getItem('sheet2dashboard_gmail_recipient') || 'ai.seo.kh@gmail.com';
+
+          if (token && autoSend) {
+            try {
+              const htmlBody = buildSubscriberEmailHtml([newSub], recipient);
+              await sendGmailMessage({
+                accessToken: token,
+                to: recipient,
+                subject: `[Sheet2Dashboard] New Subscriber: ${newSub.name || 'User'} (${newSub.email})`,
+                htmlBody,
+              });
+              const marked = updated.map((s) => (s.id === newSub.id ? { ...s, sentToGmail: true } : s));
+              setSubscribers(marked);
+              localStorage.setItem('sheet2dashboard_subscribers', JSON.stringify(marked));
+            } catch (err) {
+              console.warn('Auto-forward to Gmail encountered an issue:', err);
+            }
+          }
         }}
+      />
+
+      {/* Gmail Subscriber Sync Modal */}
+      <GmailIntegrationModal
+        isOpen={showGmailModal}
+        onClose={() => setShowGmailModal(false)}
+        subscribers={subscribers}
+        onSubscribersUpdated={(updated) => setSubscribers(updated)}
+        defaultRecipientEmail="ai.seo.kh@gmail.com"
       />
 
       {/* Top Application Header */}
@@ -256,6 +347,10 @@ export default function App() {
         onSaveSpec={handleSaveSpec}
         onLoadSpec={handleLoadSpec}
         onReset={handleReset}
+        onOpenGmailSync={() => setShowGmailModal(true)}
+        gmailConnected={hasGmailToken}
+        gmailUserEmail={gmailUser?.email || undefined}
+        subscriberCount={subscribers.length}
       />
 
       {/* Main Content Area */}

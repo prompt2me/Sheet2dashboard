@@ -7,6 +7,7 @@ import {
   Upload,
   RotateCcw,
   Layers,
+  Mail,
 } from 'lucide-react';
 import { DashboardSpec, QualityStatus } from '../types/dashboard';
 
@@ -20,6 +21,10 @@ interface HeaderProps {
   onSaveSpec: () => void;
   onLoadSpec: (spec: DashboardSpec) => void;
   onReset: () => void;
+  onOpenGmailSync?: () => void;
+  gmailConnected?: boolean;
+  gmailUserEmail?: string;
+  subscriberCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -32,6 +37,10 @@ export const Header: React.FC<HeaderProps> = ({
   onSaveSpec,
   onLoadSpec,
   onReset,
+  onOpenGmailSync,
+  gmailConnected = false,
+  gmailUserEmail,
+  subscriberCount = 0,
 }) => {
   const steps = [
     { num: 1, label: 'Upload & Review' },
@@ -124,6 +133,27 @@ export const Header: React.FC<HeaderProps> = ({
               )}
               {getStatusBadge()}
             </div>
+          )}
+
+          {/* Gmail Subscriber Sync Button */}
+          {onOpenGmailSync && (
+            <button
+              onClick={onOpenGmailSync}
+              title="Manage Gmail integration and send subscribers to your inbox"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                gmailConnected
+                  ? 'bg-blue-600/25 border-blue-500/50 text-blue-200 hover:bg-blue-600/35'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+              }`}
+            >
+              <Mail className={`w-3.5 h-3.5 ${gmailConnected ? 'text-blue-400' : 'text-slate-400'}`} />
+              <span>{gmailConnected ? (gmailUserEmail ? `Gmail: ${gmailUserEmail.split('@')[0]}` : 'Gmail Connected') : 'Connect Gmail'}</span>
+              {subscriberCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-blue-500 text-white text-[10px] font-bold">
+                  {subscriberCount}
+                </span>
+              )}
+            </button>
           )}
 
           {spec && (
