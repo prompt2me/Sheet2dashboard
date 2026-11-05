@@ -15,7 +15,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const portArgIdx = process.argv.indexOf('--port');
+const portArg = portArgIdx !== -1 ? parseInt(process.argv[portArgIdx + 1], 10) : null;
+const PORT = portArg || (process.env.PORT && process.env.PORT !== '8080' ? parseInt(process.env.PORT, 10) : 3000);
 
 // Middleware for parsing large JSON and payloads (for image base64 and data)
 app.use(express.json({ limit: '50mb' }));

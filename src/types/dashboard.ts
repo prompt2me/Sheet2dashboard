@@ -17,6 +17,9 @@ export type ColumnDataType =
   | 'boolean'
   | 'unknown';
 
+export type PiiType = 'name' | 'email' | 'phone' | 'address' | 'id' | 'financial' | 'custom';
+export type PiiRedactionMethod = 'mask' | 'hash' | 'redact_label' | 'none';
+
 export interface ColumnProfile {
   name: string;
   originalName: string;
@@ -34,6 +37,9 @@ export interface ColumnProfile {
   detectedCurrencies?: string[];
   detectedUnits?: string[];
   hasMixedUnits?: boolean;
+  isPII?: boolean;
+  piiType?: PiiType;
+  piiRedactionMethod?: PiiRedactionMethod;
 }
 
 export type QualityStatus = 'ready' | 'ready_with_caveats' | 'needs_cleaning' | 'unsafe';

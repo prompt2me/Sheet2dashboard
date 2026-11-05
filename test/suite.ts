@@ -14,6 +14,12 @@ import { buildRecommendedSpec, evaluateChartSuitability } from '../src/utils/rec
 import { generateProductionWorkbook } from '../src/utils/excelGenerator';
 import { runComprehensiveWorkbookValidation } from '../src/utils/qaValidator';
 import { SAMPLE_DATASETS } from '../src/utils/sampleDatasets';
+import {
+  maskPiiString,
+  generateDeterministicPiiHash,
+  redactCellValue,
+  detectPiiColumn,
+} from '../src/utils/piiRedactor';
 
 let totalTests = 0;
 let passedTests = 0;
@@ -79,6 +85,27 @@ async function runTests() {
   assert(messyAudit.anomalies.length > 0, 'Detects extreme statistical outlier (STL-999 Titanium Bar)');
   const spikeAnomaly = messyAudit.anomalies.find((a) => a.value >= 70000);
   assert(Boolean(spikeAnomaly && spikeAnomaly.zScore > 2.5), 'Spike anomaly z-score > 2.5');
+
+  // PHASE 2.5: PII REDACTION & GDPR PRIVACY COMPLIANCE
+  console.log('\nPhase 2.5: PII Detection, Redaction & GDPR Masking');
+  const emailDet = detectPiiColumn('User_Email', ['alice@example.com', 'bob@acme.org']);
+  assert(emailDet.isPII === true && emailDet.piiType === 'email', 'Auto-detects email column as PII');
+
+  const phoneDet = detectPiiColumn('phone_number', ['+1-555-0199', '555-0144']);
+  assert(phoneDet.isPII === true && phoneDet.piiType === 'phone', 'Auto-detects phone number as PII');
+
+  const maskedEmail = maskPiiString('john.doe@enterprise.com', 'email');
+  assert(maskedEmail.startsWith('j') && maskedEmail.includes('***') && maskedEmail.endsWith('@enterprise.com'), 'Masks email while keeping domain safe');
+
+  const hash1 = generateDeterministicPiiHash('Customer_A');
+  const hash2 = generateDeterministicPiiHash('Customer_A');
+  const hash3 = generateDeterministicPiiHash('Customer_B');
+  assert(hash1 === hash2, 'Deterministic SHA-256 hash is consistent for identical customer');
+  assert(hash1 !== hash3, 'Deterministic SHA-256 hash differs for different customers');
+  assert(hash1.startsWith('anon_'), 'Pseudonym hash prefix adheres to anon_ format');
+
+  const redactedValue = redactCellValue('alice@example.com', 'redact_label', 'email');
+  assert(redactedValue === '[REDACTED PII]', 'Label redaction outputs [REDACTED PII]');
 
   // PHASE 3: RECOMMENDATION ENGINE & SUITABILITY GATING
   console.log('\nPhase 3: Recommendation Engine & Chart Suitability');

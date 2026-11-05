@@ -6,6 +6,7 @@ import {
   QualityStatus,
   AnomalyItem,
 } from '../types/dashboard';
+import { detectPiiColumn } from './piiRedactor';
 
 /**
  * Currency symbols and codes to detect currency strings
@@ -290,6 +291,8 @@ export function classifyColumn(name: string, values: any[], index: number): Colu
     uncertaintyReason = `High cardinality with unclear semantic meaning.`;
   }
 
+  const piiCheck = detectPiiColumn(name, sampleValues);
+
   return {
     name,
     originalName: name,
@@ -307,6 +310,9 @@ export function classifyColumn(name: string, values: any[], index: number): Colu
     detectedCurrencies: Array.from(currencySymbolsFound),
     detectedUnits: unit ? [unit] : [],
     hasMixedUnits: currencySymbolsFound.size > 1,
+    isPII: piiCheck.isPII,
+    piiType: piiCheck.piiType,
+    piiRedactionMethod: piiCheck.isPII ? 'mask' : 'none',
   };
 }
 

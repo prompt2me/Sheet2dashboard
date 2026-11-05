@@ -6,6 +6,7 @@ import { StepColumnAudit } from './components/StepColumnAudit';
 import { StepContentBuilder } from './components/StepContentBuilder';
 import { StepPreview } from './components/StepPreview';
 import { StepExportQA } from './components/StepExportQA';
+import { SubscriptionModal } from './components/SubscriptionModal';
 
 import {
   ColumnProfile,
@@ -23,6 +24,9 @@ import { runComprehensiveWorkbookValidation } from './utils/qaValidator';
 
 export default function App() {
   const [currentStep, setCurrentStep] = useState<number>(1);
+  const [isSubscribed, setIsSubscribed] = useState<boolean>(
+    () => localStorage.getItem('sheet2dashboard_subscribed') === 'true'
+  );
 
   // Raw dataset state
   const [filename, setFilename] = useState<string>('');
@@ -230,6 +234,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-800">
+      {/* Mandatory Subscription Pop-up Modal ("Stay with us ! / subscribe to us and get the last update.") */}
+      <SubscriptionModal
+        isOpen={!isSubscribed}
+        onSubscribed={(email, name) => {
+          localStorage.setItem('sheet2dashboard_subscribed', 'true');
+          localStorage.setItem('sheet2dashboard_subscriber_email', email);
+          if (name) localStorage.setItem('sheet2dashboard_subscriber_name', name);
+          setIsSubscribed(true);
+        }}
+      />
+
       {/* Top Application Header */}
       <Header
         currentStep={currentStep}

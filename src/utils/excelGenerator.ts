@@ -7,6 +7,7 @@ import {
   EvidenceFinding,
 } from '../types/dashboard';
 import { cleanNumericValue } from './dataProfiler';
+import { redactCellValue } from './piiRedactor';
 
 // Professional, Color-Blind Safe Color Palettes (Arial font used universally)
 const THEME_PALETTES = {
@@ -707,9 +708,14 @@ export async function generateProductionWorkbook(
     const rNum = rIdx + 2;
     columns.forEach((col, cIdx) => {
       const c = wsData.getCell(rNum, cIdx + 1);
-      const rawVal = row[col.name];
+      let rawVal = row[col.name];
 
-      if (['numeric', 'currency', 'count', 'percentage', 'target'].includes(col.userType)) {
+      // GDPR PII Redaction
+      if (col.isPII && col.piiRedactionMethod && col.piiRedactionMethod !== 'none') {
+        rawVal = redactCellValue(rawVal, col.piiRedactionMethod, col.piiType);
+      }
+
+      if (['numeric', 'currency', 'count', 'percentage', 'target'].includes(col.userType) && (!col.isPII || col.piiRedactionMethod === 'none')) {
         const { numericValue, isPercent } = cleanNumericValue(rawVal);
         if (numericValue !== null) {
           c.value = numericValue;
@@ -725,7 +731,7 @@ export async function generateProductionWorkbook(
         } else {
           c.value = null;
         }
-      } else if (col.userType === 'date') {
+      } else if (col.userType === 'date' && (!col.isPII || col.piiRedactionMethod === 'none')) {
         const dStr = String(rawVal ?? '').slice(0, 10);
         c.value = dStr;
         c.numFmt = 'YYYY-MM-DD';
@@ -811,6 +817,45 @@ export async function generateProductionWorkbook(
       wsControls.getCell(`${col}${rNum}`).border = { bottom: { style: 'thin', color: { argb: `FF${palette.border}` } } };
     });
   });
+
+  // GDPR Compliance & PII Redaction Log in Controls sheet
+  const piiCols = columns.filter((col) => col.isPII && col.piiRedactionMethod && col.piiRedactionMethod !== 'none');
+  const piiStartRow = 8 + spec.metricDictionary.length + 2;
+
+  wsControls.getCell(`A${piiStartRow}`).value = 'GDPR PRIVACY & PII REDACTION COMPLIANCE LOG';
+  wsControls.mergeCells(`A${piiStartRow}:F${piiStartRow}`);
+  wsControls.getCell(`A${piiStartRow}`).font = { name: FONT_NAME, size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+  wsControls.getCell(`A${piiStartRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${palette.primary}` } };
+
+  const piiHeaders = ['Column Name', 'PII Classification', 'Redaction Method Applied', 'Analytical Parity', 'GDPR Article Basis', 'Data Protection Rule'];
+  piiHeaders.forEach((h, idx) => {
+    const c = wsControls.getCell(piiStartRow + 1, idx + 1);
+    c.value = h;
+    c.font = { name: FONT_NAME, size: 9, bold: true };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${palette.primaryLight}` } };
+    c.border = { bottom: { style: 'medium', color: { argb: `FF${palette.primary}` } } };
+  });
+
+  if (piiCols.length === 0) {
+    wsControls.getCell(`A${piiStartRow + 2}`).value = 'No columns designated as sensitive PII. Standard processing applied.';
+    wsControls.mergeCells(`A${piiStartRow + 2}:F${piiStartRow + 2}`);
+    wsControls.getCell(`A${piiStartRow + 2}`).font = { name: FONT_NAME, size: 9, italic: true };
+  } else {
+    piiCols.forEach((pCol, idx) => {
+      const rNum = piiStartRow + 2 + idx;
+      wsControls.getCell(`A${rNum}`).value = pCol.name;
+      wsControls.getCell(`B${rNum}`).value = (pCol.piiType || 'Personal Data').toUpperCase();
+      wsControls.getCell(`C${rNum}`).value = (pCol.piiRedactionMethod || 'Masked').toUpperCase();
+      wsControls.getCell(`D${rNum}`).value = pCol.piiRedactionMethod === 'hash' ? 'Preserves Unique Grouping' : 'Partial Masked';
+      wsControls.getCell(`E${rNum}`).value = 'GDPR Art. 5(1)(c) & Art. 32';
+      wsControls.getCell(`F${rNum}`).value = 'Identifiable personal data redacted before spreadsheet export.';
+
+      ['A', 'B', 'C', 'D', 'E', 'F'].forEach((col) => {
+        wsControls.getCell(`${col}${rNum}`).font = { name: FONT_NAME, size: 9 };
+        wsControls.getCell(`${col}${rNum}`).border = { bottom: { style: 'thin', color: { argb: `FF${palette.border}` } } };
+      });
+    });
+  }
 
   // -------------------------------------------------------------
   // SHEET 7: Original_Data (Untouched Original Upload)
