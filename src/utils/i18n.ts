@@ -32,7 +32,7 @@ export const TRANSLATIONS = {
     step5: 'Export & Delivery QA',
 
     // Subscription Modal
-    stayWithUs: 'Stay with us !',
+    stayWithUs: 'stay with us !',
     subscribeSubtitle: 'subscribe to us and get the last update.',
     subscriberPerks: 'Subscriber Member Privileges:',
     perk1: 'Unlimited Excel formula & dashboard generation',

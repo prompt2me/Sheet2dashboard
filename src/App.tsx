@@ -28,9 +28,8 @@ export default function App() {
   const [language, setLanguage] = useState<AppLanguage>(
     () => (localStorage.getItem('sheet2dashboard_language') as AppLanguage) || 'en'
   );
-  const [isSubscribed, setIsSubscribed] = useState<boolean>(
-    () => localStorage.getItem('sheet2dashboard_subscribed') === 'true'
-  );
+  // The pop up starts first and forces the user to subscribe only with mail to unlock the website app
+  const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
   const [subscriberEmail, setSubscriberEmail] = useState<string>(
     () => localStorage.getItem('sheet2dashboard_subscriber_email') || ''
   );

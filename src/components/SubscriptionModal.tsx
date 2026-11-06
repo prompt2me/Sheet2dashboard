@@ -15,7 +15,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   language = 'en',
   onLanguageChange,
 }) => {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(
+    () => localStorage.getItem('sheet2dashboard_subscriber_email') || ''
+  );
   const [error, setError] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
