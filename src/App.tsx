@@ -7,10 +7,6 @@ import { StepContentBuilder } from './components/StepContentBuilder';
 import { StepPreview } from './components/StepPreview';
 import { StepExportQA } from './components/StepExportQA';
 import { SubscriptionModal } from './components/SubscriptionModal';
-import { GmailIntegrationModal } from './components/GmailIntegrationModal';
-import { SubscriberRecord, sendGmailMessage, buildSubscriberEmailHtml } from './utils/gmailService';
-import { initAuth, getAccessToken } from './utils/firebaseAuth';
-import { User } from 'firebase/auth';
 
 import {
   ColumnProfile,
@@ -25,56 +21,38 @@ import { classifyColumn, runDataQualityAudit } from './utils/dataProfiler';
 import { buildRecommendedSpec } from './utils/recommendationEngine';
 import { generateProductionWorkbook } from './utils/excelGenerator';
 import { runComprehensiveWorkbookValidation } from './utils/qaValidator';
+import { AppLanguage, getTranslation } from './utils/i18n';
 
 export default function App() {
   const [currentStep, setCurrentStep] = useState<number>(1);
+  const [language, setLanguage] = useState<AppLanguage>(
+    () => (localStorage.getItem('sheet2dashboard_language') as AppLanguage) || 'en'
+  );
   const [isSubscribed, setIsSubscribed] = useState<boolean>(
     () => localStorage.getItem('sheet2dashboard_subscribed') === 'true'
   );
+  const [subscriberEmail, setSubscriberEmail] = useState<string>(
+    () => localStorage.getItem('sheet2dashboard_subscriber_email') || ''
+  );
 
-  // Gmail & Subscribers state
-  const [showGmailModal, setShowGmailModal] = useState<boolean>(false);
-  const [gmailUser, setGmailUser] = useState<User | null>(null);
-  const [hasGmailToken, setHasGmailToken] = useState<boolean>(false);
-  const [subscribers, setSubscribers] = useState<SubscriberRecord[]>(() => {
-    try {
-      const stored = localStorage.getItem('sheet2dashboard_subscribers');
-      if (stored) return JSON.parse(stored);
-      // Seed with previous subscriber if exists
-      const existingEmail = localStorage.getItem('sheet2dashboard_subscriber_email');
-      if (existingEmail) {
-        return [
-          {
-            id: 'sub_seed',
-            name: localStorage.getItem('sheet2dashboard_subscriber_name') || 'Valued Subscriber',
-            email: existingEmail,
-            timestamp: new Date().toISOString(),
-            sentToGmail: false,
-          },
-        ];
-      }
-    } catch {
-      // fallback
+  const t = getTranslation(language);
+
+  const handleLanguageChange = (newLang: AppLanguage) => {
+    setLanguage(newLang);
+    localStorage.setItem('sheet2dashboard_language', newLang);
+    if (spec) {
+      setSpec({ ...spec, language: newLang });
     }
-    return [];
-  });
+  };
 
-  // Initialize Firebase Auth listener for Google Account
-  React.useEffect(() => {
-    const unsub = initAuth(
-      (user, token) => {
-        setGmailUser(user);
-        setHasGmailToken(Boolean(token));
-      },
-      () => {
-        setGmailUser(null);
-        setHasGmailToken(false);
-      }
-    );
-    return () => {
-      if (typeof unsub === 'function') unsub();
-    };
-  }, []);
+  const handleReturnToNewUser = () => {
+    localStorage.removeItem('sheet2dashboard_subscribed');
+    localStorage.removeItem('sheet2dashboard_subscriber_email');
+    localStorage.removeItem('sheet2dashboard_subscriber_name');
+    setSubscriberEmail('');
+    setIsSubscribed(false);
+    handleReset();
+  };
 
   // Raw dataset state
   const [filename, setFilename] = useState<string>('');
@@ -285,58 +263,17 @@ export default function App() {
       {/* Mandatory Subscription Pop-up Modal ("Stay with us ! / subscribe to us and get the last update.") */}
       <SubscriptionModal
         isOpen={!isSubscribed}
-        onSubscribed={async (email, name) => {
+        language={language}
+        onLanguageChange={handleLanguageChange}
+        onSubscribed={(email) => {
           localStorage.setItem('sheet2dashboard_subscribed', 'true');
           localStorage.setItem('sheet2dashboard_subscriber_email', email);
-          if (name) localStorage.setItem('sheet2dashboard_subscriber_name', name);
+          setSubscriberEmail(email);
           setIsSubscribed(true);
-
-          const newSub: SubscriberRecord = {
-            id: 'sub_' + Date.now(),
-            name: name || '',
-            email,
-            timestamp: new Date().toISOString(),
-            sentToGmail: false,
-          };
-
-          const updated = [newSub, ...subscribers.filter((s) => s.email !== email)];
-          setSubscribers(updated);
-          localStorage.setItem('sheet2dashboard_subscribers', JSON.stringify(updated));
-
-          // If auto-forward to Gmail is enabled and an active OAuth token exists, send immediate notification
-          const autoSend = localStorage.getItem('sheet2dashboard_auto_email_subscribers') === 'true';
-          const token = await getAccessToken();
-          const recipient = localStorage.getItem('sheet2dashboard_gmail_recipient') || 'ai.seo.kh@gmail.com';
-
-          if (token && autoSend) {
-            try {
-              const htmlBody = buildSubscriberEmailHtml([newSub], recipient);
-              await sendGmailMessage({
-                accessToken: token,
-                to: recipient,
-                subject: `[Sheet2Dashboard] New Subscriber: ${newSub.name || 'User'} (${newSub.email})`,
-                htmlBody,
-              });
-              const marked = updated.map((s) => (s.id === newSub.id ? { ...s, sentToGmail: true } : s));
-              setSubscribers(marked);
-              localStorage.setItem('sheet2dashboard_subscribers', JSON.stringify(marked));
-            } catch (err) {
-              console.warn('Auto-forward to Gmail encountered an issue:', err);
-            }
-          }
         }}
       />
 
-      {/* Gmail Subscriber Sync Modal */}
-      <GmailIntegrationModal
-        isOpen={showGmailModal}
-        onClose={() => setShowGmailModal(false)}
-        subscribers={subscribers}
-        onSubscribersUpdated={(updated) => setSubscribers(updated)}
-        defaultRecipientEmail="ai.seo.kh@gmail.com"
-      />
-
-      {/* Top Application Header */}
+      {/* Top Application Header with French / English version switch & Return to New User */}
       <Header
         currentStep={currentStep}
         onSelectStep={(step) => setCurrentStep(step)}
@@ -347,10 +284,10 @@ export default function App() {
         onSaveSpec={handleSaveSpec}
         onLoadSpec={handleLoadSpec}
         onReset={handleReset}
-        onOpenGmailSync={() => setShowGmailModal(true)}
-        gmailConnected={hasGmailToken}
-        gmailUserEmail={gmailUser?.email || undefined}
-        subscriberCount={subscribers.length}
+        language={language}
+        onLanguageChange={handleLanguageChange}
+        subscriberEmail={subscriberEmail}
+        onReturnToNewUser={handleReturnToNewUser}
       />
 
       {/* Main Content Area */}
@@ -362,10 +299,10 @@ export default function App() {
               <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
               <div className="space-y-1">
                 <h3 className="text-base font-bold text-slate-900">
-                  Building Production Excel Workbook...
+                  {t.generatingWorkbook}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Injecting OpenXML DrawingML charts, dynamic named ranges, live SUMIFS formulas, and running pre-flight delivery QA.
+                  {t.generatingHint}
                 </p>
               </div>
             </div>
@@ -387,6 +324,7 @@ export default function App() {
               <StepUpload
                 onDataLoaded={handleDataLoaded}
                 onOcrLoaded={handleOcrLoaded}
+                language={language}
               />
             )}
 
@@ -445,10 +383,25 @@ export default function App() {
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Sheet2Dashboard · Professional Formula-Driven Excel Dashboard Engine</span>
-          <span className="font-mono text-[11px] text-slate-400">
-            OpenXML Compliant · Zero-Hardcoding Contract · LibreOffice Verified
-          </span>
+          <span>{t.footerBrand}</span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(t.confirmReturnToNewUser)) {
+                  handleReturnToNewUser();
+                }
+              }}
+              className="text-slate-500 hover:text-rose-600 transition underline underline-offset-2 cursor-pointer font-medium text-[11px]"
+              title={t.returnToNewUserTooltip}
+            >
+              {t.returnToNewUser}
+            </button>
+            <span className="text-slate-300">·</span>
+            <span className="font-mono text-[11px] text-slate-400">
+              {t.footerContract}
+            </span>
+          </div>
         </div>
       </footer>
     </div>

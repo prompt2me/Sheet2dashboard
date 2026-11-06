@@ -7,9 +7,11 @@ import {
   Upload,
   RotateCcw,
   Layers,
-  Mail,
+  Globe,
+  UserX,
 } from 'lucide-react';
 import { DashboardSpec, QualityStatus } from '../types/dashboard';
+import { AppLanguage, getTranslation } from '../utils/i18n';
 
 interface HeaderProps {
   currentStep: number;
@@ -21,10 +23,10 @@ interface HeaderProps {
   onSaveSpec: () => void;
   onLoadSpec: (spec: DashboardSpec) => void;
   onReset: () => void;
-  onOpenGmailSync?: () => void;
-  gmailConnected?: boolean;
-  gmailUserEmail?: string;
-  subscriberCount?: number;
+  language: AppLanguage;
+  onLanguageChange: (lang: AppLanguage) => void;
+  subscriberEmail?: string;
+  onReturnToNewUser?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -37,17 +39,19 @@ export const Header: React.FC<HeaderProps> = ({
   onSaveSpec,
   onLoadSpec,
   onReset,
-  onOpenGmailSync,
-  gmailConnected = false,
-  gmailUserEmail,
-  subscriberCount = 0,
+  language,
+  onLanguageChange,
+  subscriberEmail,
+  onReturnToNewUser,
 }) => {
+  const t = getTranslation(language);
+
   const steps = [
-    { num: 1, label: 'Upload & Review' },
-    { num: 2, label: 'Quality & Audit' },
-    { num: 3, label: 'Visuals & Spec' },
-    { num: 4, label: 'Live Preview' },
-    { num: 5, label: 'Export & Delivery QA' },
+    { num: 1, label: t.step1 },
+    { num: 2, label: t.step2 },
+    { num: 3, label: t.step3 },
+    { num: 4, label: t.step4 },
+    { num: 5, label: t.step5 },
   ];
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,28 +77,28 @@ export const Header: React.FC<HeaderProps> = ({
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            Audit: Ready
+            {t.auditReady}
           </span>
         );
       case 'ready_with_caveats':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-            Ready with Caveats
+            {t.auditCaveats}
           </span>
         );
       case 'needs_cleaning':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
             <AlertTriangle className="w-3.5 h-3.5 text-orange-600" />
-            Needs Cleaning
+            {t.auditNeedsCleaning}
           </span>
         );
       case 'unsafe':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-800">
             <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-            Unsafe for Interpretation
+            {t.auditUnsafe}
           </span>
         );
     }
@@ -113,77 +117,112 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-2">
               <h1 className="text-base font-semibold tracking-tight text-white">Sheet2Dashboard</h1>
               <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                Formula-Driven BI
+                {t.brandTag}
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Transform CSVs, XLSX & table images into production-grade Excel dashboards
+              {t.brandSubtitle}
             </p>
           </div>
         </div>
 
-        {/* Dataset Meta & Actions */}
+        {/* Header Right Actions: French / English Switcher & Dataset Meta */}
         <div className="flex items-center gap-3 flex-wrap">
+          {/* French / English Version Switcher */}
+          <div className="flex items-center rounded-lg bg-slate-800 p-0.5 border border-slate-700 text-xs font-semibold shadow-inner">
+            <Globe className="w-3.5 h-3.5 text-slate-400 ml-1.5 mr-1 shrink-0" />
+            <button
+              type="button"
+              onClick={() => onLanguageChange('fr')}
+              className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
+                language === 'fr'
+                  ? 'bg-blue-600 text-white shadow-xs font-bold'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+              }`}
+              title="Basculer vers la version française"
+            >
+              <span>French</span>
+            </button>
+            <span className="text-slate-500 text-[11px] px-1 select-none font-bold">/</span>
+            <button
+              type="button"
+              onClick={() => onLanguageChange('en')}
+              className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
+                language === 'en'
+                  ? 'bg-blue-600 text-white shadow-xs font-bold'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+              }`}
+              title="Switch to English version"
+            >
+              <span>English</span>
+            </button>
+          </div>
+
           {datasetName && (
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-800 border border-slate-700 text-xs">
               <Layers className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-slate-200 font-medium truncate max-w-[160px]">{datasetName}</span>
               {rowCount !== undefined && (
-                <span className="text-slate-400">({rowCount.toLocaleString()} rows)</span>
+                <span className="text-slate-400">({rowCount.toLocaleString()} {t.rows})</span>
               )}
               {getStatusBadge()}
             </div>
           )}
 
-          {/* Gmail Subscriber Sync Button */}
-          {onOpenGmailSync && (
-            <button
-              onClick={onOpenGmailSync}
-              title="Manage Gmail integration and send subscribers to your inbox"
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${
-                gmailConnected
-                  ? 'bg-blue-600/25 border-blue-500/50 text-blue-200 hover:bg-blue-600/35'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-              }`}
-            >
-              <Mail className={`w-3.5 h-3.5 ${gmailConnected ? 'text-blue-400' : 'text-slate-400'}`} />
-              <span>{gmailConnected ? (gmailUserEmail ? `Gmail: ${gmailUserEmail.split('@')[0]}` : 'Gmail Connected') : 'Connect Gmail'}</span>
-              {subscriberCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-blue-500 text-white text-[10px] font-bold">
-                  {subscriberCount}
-                </span>
-              )}
-            </button>
-          )}
-
           {spec && (
             <button
               onClick={onSaveSpec}
-              title="Save current dashboard specification to JSON"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+              title={t.saveSpec}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
             >
               <Download className="w-3.5 h-3.5 text-blue-400" />
-              Save Spec
+              {t.saveSpec}
             </button>
           )}
 
           <label
-            title="Load an existing dashboard specification JSON"
+            title={t.loadSpec}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer transition"
           >
             <Upload className="w-3.5 h-3.5 text-emerald-400" />
-            Load Spec
+            {t.loadSpec}
             <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
           </label>
 
           {datasetName && (
             <button
               onClick={onReset}
-              title="Start over with a new dataset"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
+              title={t.reset}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              Reset
+              {t.reset}
+            </button>
+          )}
+
+          {/* Active Subscriber Indicator */}
+          {subscriberEmail && (
+            <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 border border-slate-700 text-xs text-slate-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
+              <span className="text-slate-400 text-[11px]">{t.subscriberActive}:</span>
+              <span className="font-mono text-[11px] text-slate-200 truncate max-w-[120px]">{subscriberEmail}</span>
+            </div>
+          )}
+
+          {/* Return to New User Option */}
+          {onReturnToNewUser && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(t.confirmReturnToNewUser)) {
+                  onReturnToNewUser();
+                }
+              }}
+              title={t.returnToNewUserTooltip}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-500/50 transition cursor-pointer"
+            >
+              <UserX className="w-3.5 h-3.5 text-rose-400" />
+              <span>{t.returnToNewUser}</span>
             </button>
           )}
         </div>

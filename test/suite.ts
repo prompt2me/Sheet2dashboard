@@ -20,7 +20,6 @@ import {
   redactCellValue,
   detectPiiColumn,
 } from '../src/utils/piiRedactor';
-import { buildSubscriberEmailHtml } from '../src/utils/gmailService';
 
 let totalTests = 0;
 let passedTests = 0;
@@ -107,16 +106,6 @@ async function runTests() {
 
   const redactedValue = redactCellValue('alice@example.com', 'redact_label', 'email');
   assert(redactedValue === '[REDACTED PII]', 'Label redaction outputs [REDACTED PII]');
-
-  // PHASE 2.6: GMAIL SUBSCRIBER NOTIFICATION TEMPLATE
-  console.log('\nPhase 2.6: Gmail Subscriber Notification HTML Formatting');
-  const sampleSubs = [
-    { id: '1', name: 'Alex Johnson', email: 'alex@example.com', timestamp: new Date().toISOString() },
-  ];
-  const emailHtml = buildSubscriberEmailHtml(sampleSubs, 'ai.seo.kh@gmail.com');
-  assert(emailHtml.includes('alex@example.com'), 'Email HTML contains subscriber email');
-  assert(emailHtml.includes('Alex Johnson'), 'Email HTML contains subscriber name');
-  assert(emailHtml.includes('ai.seo.kh@gmail.com'), 'Email HTML contains recipient email');
 
   // PHASE 3: RECOMMENDATION ENGINE & SUITABILITY GATING
   console.log('\nPhase 3: Recommendation Engine & Chart Suitability');

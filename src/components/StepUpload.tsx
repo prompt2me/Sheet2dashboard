@@ -15,6 +15,7 @@ import {
 import { parseDelimitedText, parseExcelWorkbook, parseTextOrMarkdown, validateJoinKey } from '../utils/fileParser';
 import { SAMPLE_DATASETS, SampleDataset } from '../utils/sampleDatasets';
 import { OcrExtractionData } from '../types/dashboard';
+import { AppLanguage, getTranslation } from '../utils/i18n';
 
 interface StepUploadProps {
   onDataLoaded: (
@@ -31,9 +32,11 @@ interface StepUploadProps {
     rawText?: string
   ) => void;
   onOcrLoaded: (ocrData: OcrExtractionData, previewUrl: string) => void;
+  language?: AppLanguage;
 }
 
-export const StepUpload: React.FC<StepUploadProps> = ({ onDataLoaded, onOcrLoaded }) => {
+export const StepUpload: React.FC<StepUploadProps> = ({ onDataLoaded, onOcrLoaded, language = 'en' }) => {
+  const t = getTranslation(language);
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -258,10 +261,10 @@ export const StepUpload: React.FC<StepUploadProps> = ({ onDataLoaded, onOcrLoade
       {/* Hero Welcome */}
       <div className="text-center space-y-2">
         <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-          Turn Any Sheet, Table, or Image into a Live Excel Dashboard
+          {t.uploadTitle}
         </h2>
         <p className="text-sm text-slate-600 max-w-2xl mx-auto">
-          Upload messy data with full peace of mind. Sheet2Dashboard classifies column types, detects mixed units, flags anomalies, and creates a formula-driven, native-chart .xlsx workbook.
+          {t.uploadSubtitle}
         </p>
       </div>
 
@@ -344,11 +347,10 @@ export const StepUpload: React.FC<StepUploadProps> = ({ onDataLoaded, onOcrLoade
 
             <div className="space-y-1">
               <div className="text-base font-semibold text-slate-800">
-                Drag and drop your file here, or{' '}
-                <span className="text-blue-600 underline">browse files</span>
+                {t.dropzoneMain}
               </div>
               <p className="text-xs text-slate-500">
-                Supports CSV, TSV, Excel (.xlsx, .xls), TXT, Markdown tables, and table screenshots/receipts (PNG, JPG, WEBP)
+                {t.dropzoneSub}
               </p>
             </div>
 
