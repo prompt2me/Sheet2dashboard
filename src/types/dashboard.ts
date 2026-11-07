@@ -30,6 +30,8 @@ export interface ColumnProfile {
   sampleValues: (string | number | boolean | null)[];
   uniqueCount: number;
   missingCount: number;
+  missingPercentage?: number;
+  distinctPercentage?: number;
   min?: number | string;
   max?: number | string;
   isUncertain: boolean;
@@ -40,6 +42,9 @@ export interface ColumnProfile {
   isPII?: boolean;
   piiType?: PiiType;
   piiRedactionMethod?: PiiRedactionMethod;
+  biRole?: 'dimension' | 'measure' | 'identifier' | 'date' | 'attribute';
+  inconsistencies?: string[];
+  classificationConfidence?: number;
 }
 
 export type QualityStatus = 'ready' | 'ready_with_caveats' | 'needs_cleaning' | 'unsafe';
@@ -85,11 +90,18 @@ export interface DataQualityAudit {
   totalColumns: number;
   duplicateRowCount: number;
   missingCellsCount: number;
+  completenessScore?: number;
+  overallHealthScore?: number;
   issues: QualityIssue[];
   anomalies: AnomalyItem[];
   mixedUnitWarnings: string[];
   hasSummaryRows: boolean;
   summaryRowsDetected?: number[];
+  analystVerdict?: {
+    headline: string;
+    summary: string;
+    actionItems: string[];
+  };
 }
 
 export type BusinessTemplate =

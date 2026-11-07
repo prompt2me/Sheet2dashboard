@@ -95,33 +95,43 @@ export const StepColumnAudit: React.FC<StepColumnAuditProps> = ({
     });
   };
 
+  const [columnFilter, setColumnFilter] = useState<'all' | 'measures' | 'dimensions' | 'identifiers' | 'dates' | 'issues'>('all');
+
   const getStatusDisplay = (status: QualityStatus) => {
     switch (status) {
       case 'ready':
         return {
-          title: 'Ready for Dashboarding',
-          color: 'bg-emerald-50 text-emerald-800 border-emerald-300',
+          title: 'Ready',
+          badge: 'Executive Dashboard Ready',
+          color: 'bg-emerald-50 text-emerald-950 border-emerald-300',
+          badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
           icon: ShieldCheck,
           iconColor: 'text-emerald-600',
         };
       case 'ready_with_caveats':
         return {
-          title: 'Ready with Caveats',
-          color: 'bg-amber-50 text-amber-900 border-amber-300',
+          title: 'Ready with caveats',
+          badge: 'Analytical Caveats Noted',
+          color: 'bg-amber-50 text-amber-950 border-amber-300',
+          badgeColor: 'bg-amber-100 text-amber-800 border-amber-300',
           icon: AlertTriangle,
           iconColor: 'text-amber-600',
         };
       case 'needs_cleaning':
         return {
-          title: 'Needs Cleaning',
-          color: 'bg-orange-50 text-orange-900 border-orange-300',
+          title: 'Needs cleaning',
+          badge: 'Cleaning Recommended',
+          color: 'bg-orange-50 text-orange-950 border-orange-300',
+          badgeColor: 'bg-orange-100 text-orange-800 border-orange-300',
           icon: AlertTriangle,
           iconColor: 'text-orange-600',
         };
       case 'unsafe':
         return {
-          title: 'Unsafe for Direct Interpretation',
-          color: 'bg-rose-50 text-rose-900 border-rose-300',
+          title: 'Unsafe for interpretation',
+          badge: 'Integrity Hazard Detected',
+          color: 'bg-rose-50 text-rose-950 border-rose-300',
+          badgeColor: 'bg-rose-100 text-rose-800 border-rose-300',
           icon: XCircle,
           iconColor: 'text-rose-600',
         };
@@ -133,55 +143,98 @@ export const StepColumnAudit: React.FC<StepColumnAuditProps> = ({
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 py-4">
-      {/* Quality Status Card */}
-      <div className={`p-5 rounded-xl border ${statusInfo.color} space-y-3 shadow-sm`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-white/80 shadow-xs">
-              <StatusIcon className={`w-6 h-6 ${statusInfo.iconColor}`} />
+      {/* Quality Status Card with Business Intelligence Analyst Verdict */}
+      <div className={`p-5 rounded-xl border ${statusInfo.color} space-y-4 shadow-sm`}>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-xl bg-white/90 shadow-xs shrink-0 mt-0.5">
+              <StatusIcon className={`w-7 h-7 ${statusInfo.iconColor}`} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs uppercase font-bold tracking-wider opacity-75">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs uppercase font-extrabold tracking-wider px-2 py-0.5 rounded bg-black/5">
                   Data Quality Audit
                 </span>
-                <span className="text-sm font-extrabold">{statusInfo.title}</span>
+                <span className="text-base font-black tracking-tight">{statusInfo.title}</span>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${statusInfo.badgeColor}`}>
+                  {statusInfo.badge}
+                </span>
               </div>
-              <p className="text-xs mt-0.5 opacity-90">
+              <p className="text-xs opacity-90 leading-relaxed">
                 Audited {audit.totalRows.toLocaleString()} rows across {audit.totalColumns} columns.
+                {audit.completenessScore !== undefined && (
+                  <span className="font-semibold ml-1.5">
+                    Data Completeness: {audit.completenessScore}% · Overall Health: {audit.overallHealthScore ?? 100}%
+                  </span>
+                )}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Quick Metrics Badges */}
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {audit.overallHealthScore !== undefined && (
+              <div className="px-3 py-1.5 rounded-lg bg-white/80 border border-black/10 flex items-center gap-1.5 text-xs font-bold shadow-xs">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+                <span>Health: {audit.overallHealthScore}%</span>
+              </div>
+            )}
             {audit.duplicateRowCount > 0 && (
-              <span className="px-2.5 py-1 rounded bg-white/70 text-xs font-semibold">
-                {audit.duplicateRowCount} duplicates
+              <span className="px-2.5 py-1.5 rounded-lg bg-white/80 border border-black/10 text-xs font-semibold">
+                {audit.duplicateRowCount} duplicate rows
               </span>
             )}
             {audit.anomalies.length > 0 && (
-              <span className="px-2.5 py-1 rounded bg-white/70 text-xs font-semibold">
+              <span className="px-2.5 py-1.5 rounded-lg bg-white/80 border border-black/10 text-xs font-semibold">
                 {audit.anomalies.length} anomaly signals
               </span>
             )}
             {piiColumns.length > 0 && (
-              <span className="px-2.5 py-1 rounded bg-blue-100 text-blue-900 border border-blue-300 text-xs font-bold flex items-center gap-1">
-                <Lock className="w-3 h-3 text-blue-600" />
-                {piiColumns.length} PII column(s) redacted
+              <span className="px-2.5 py-1.5 rounded-lg bg-blue-100 text-blue-900 border border-blue-300 text-xs font-bold flex items-center gap-1">
+                <Lock className="w-3.5 h-3.5 text-blue-600" />
+                {piiColumns.length} PII redacted
               </span>
             )}
           </div>
         </div>
 
-        {/* Audit Status Reasons */}
-        <div className="pt-2 border-t border-black/10 text-xs space-y-1">
-          {audit.statusReasons.map((reason, idx) => (
-            <div key={idx} className="flex items-start gap-1.5 font-medium">
-              <span className="text-[10px] mt-0.5">•</span>
-              <span>{reason}</span>
-            </div>
-          ))}
+        {/* Detailed Reasons for Quality Status */}
+        <div className="pt-3 border-t border-black/10 space-y-1.5">
+          <div className="text-xs font-bold uppercase tracking-wider text-black/70 flex items-center gap-1.5">
+            <Info className="w-3.5 h-3.5" />
+            <span>Detailed Audit Findings & Status Reasons:</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+            {audit.statusReasons.map((reason, idx) => (
+              <div key={idx} className="flex items-start gap-2 bg-white/60 p-2 rounded-lg border border-black/5 font-medium">
+                <span className="text-blue-600 font-bold shrink-0">•</span>
+                <span className="leading-snug">{reason}</span>
+              </div>
+            ))}
+          </div>
         </div>
+
+        {/* Analyst Verdict & Action Plan */}
+        {audit.analystVerdict && (
+          <div className="pt-3 border-t border-black/10 bg-white/70 p-3.5 rounded-lg text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-900">
+                BI Analyst Verdict: {audit.analystVerdict.headline}
+              </span>
+            </div>
+            <p className="text-slate-600 leading-relaxed text-[11px]">
+              {audit.analystVerdict.summary}
+            </p>
+            <div className="space-y-1 text-[11px] text-slate-700">
+              <span className="font-semibold text-slate-900">Automated Pipeline Actions:</span>
+              <ul className="list-disc list-inside space-y-0.5 text-slate-600 pl-1">
+                {audit.analystVerdict.actionItems.map((item, idx) => (
+                  <li key={idx}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* GDPR PII Redaction & Data Privacy Card */}
@@ -359,149 +412,245 @@ export const StepColumnAudit: React.FC<StepColumnAuditProps> = ({
 
         {/* Tab 1: Column Classification Grid */}
         {activeTab === 'columns' && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="py-2.5 px-4">Column Name</th>
-                  <th className="py-2.5 px-3">Data Classification</th>
-                  <th className="py-2.5 px-3">Unit / Currency</th>
-                  <th className="py-2.5 px-3">Sample Values</th>
-                  <th className="py-2.5 px-3 text-center">Uniques</th>
-                  <th className="py-2.5 px-3 text-center">Missing</th>
-                  <th className="py-2.5 px-3">🔒 PII Redaction (GDPR)</th>
-                  <th className="py-2.5 px-4">Status & Caveats</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {columns.map((col, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/70 transition">
-                    <td className="py-2.5 px-4 font-semibold text-slate-800">
-                      <div>{col.name}</div>
-                      {col.originalName !== col.name && (
-                        <div className="text-[10px] text-slate-400">Orig: {col.originalName}</div>
-                      )}
-                    </td>
+          <div className="space-y-3">
+            {/* Column Role & Issue Quick Filters */}
+            <div className="px-5 pt-3 pb-1 flex items-center justify-between gap-3 flex-wrap text-xs bg-slate-50/50 border-b border-slate-200">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-slate-500 font-semibold text-[11px] mr-1">Filter View:</span>
+                {[
+                  { id: 'all', label: `All Columns (${columns.length})` },
+                  { id: 'measures', label: `Measures (${columns.filter(c => ['numeric', 'currency', 'percentage', 'count', 'target'].includes(c.userType)).length})` },
+                  { id: 'dimensions', label: `Dimensions (${columns.filter(c => ['categorical', 'boolean'].includes(c.userType)).length})` },
+                  { id: 'identifiers', label: `Identifiers (${columns.filter(c => c.userType === 'identifier').length})` },
+                  { id: 'dates', label: `Dates (${columns.filter(c => c.userType === 'date').length})` },
+                  { id: 'issues', label: `Caveats & Issues (${columns.filter(c => c.isUncertain || (c.inconsistencies && c.inconsistencies.length > 0) || c.missingCount > 0).length})` },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setColumnFilter(f.id as any)}
+                    className={`px-2.5 py-1 rounded-md transition font-medium text-[11px] cursor-pointer ${
+                      columnFilter === f.id
+                        ? 'bg-blue-600 text-white shadow-xs font-bold'
+                        : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              <span className="text-[11px] text-slate-400">
+                Audited {columns.length} columns · Click dropdown to adjust classification
+              </span>
+            </div>
 
-                    {/* Classification Dropdown */}
-                    <td className="py-2 px-3">
-                      <select
-                        value={col.userType}
-                        onChange={(e) =>
-                          onUpdateColumn(idx, {
-                            userType: e.target.value as ColumnDataType,
-                            isUncertain: false,
-                          })
-                        }
-                        className="w-full text-xs py-1 px-2 rounded border border-slate-300 bg-white font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      >
-                        {DATA_TYPES.map((dt) => (
-                          <option key={dt.type} value={dt.type}>
-                            {dt.label}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="py-2.5 px-4">Column & BI Role</th>
+                    <th className="py-2.5 px-3">Data Classification</th>
+                    <th className="py-2.5 px-3">Unit / Currency</th>
+                    <th className="py-2.5 px-3">Sample Values</th>
+                    <th className="py-2.5 px-3 text-center">Cardinality</th>
+                    <th className="py-2.5 px-3">Completeness</th>
+                    <th className="py-2.5 px-3">🔒 PII Redaction</th>
+                    <th className="py-2.5 px-4">Status & Caveats</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {columns
+                    .filter((col) => {
+                      if (columnFilter === 'measures') return ['numeric', 'currency', 'percentage', 'count', 'target'].includes(col.userType);
+                      if (columnFilter === 'dimensions') return ['categorical', 'boolean'].includes(col.userType);
+                      if (columnFilter === 'identifiers') return col.userType === 'identifier';
+                      if (columnFilter === 'dates') return col.userType === 'date';
+                      if (columnFilter === 'issues') return col.isUncertain || (col.inconsistencies && col.inconsistencies.length > 0) || col.missingCount > 0;
+                      return true;
+                    })
+                    .map((col) => {
+                      const idx = col.index;
+                      const role = col.biRole || (
+                        ['numeric', 'currency', 'count', 'percentage', 'target'].includes(col.userType)
+                          ? 'measure'
+                          : col.userType === 'date'
+                          ? 'date'
+                          : col.userType === 'identifier'
+                          ? 'identifier'
+                          : 'dimension'
+                      );
+                      const missingPct = col.missingPercentage ?? (audit.totalRows > 0 ? Math.round((col.missingCount / audit.totalRows) * 100) : 0);
+                      const completeness = 100 - missingPct;
 
-                    {/* Unit input */}
-                    <td className="py-2 px-3">
-                      <input
-                        type="text"
-                        value={col.unit}
-                        onChange={(e) => onUpdateColumn(idx, { unit: e.target.value })}
-                        placeholder="e.g. $, kg, %"
-                        className="w-24 text-xs py-1 px-2 rounded border border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                    </td>
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50/70 transition">
+                          <td className="py-2.5 px-4 font-semibold text-slate-800">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span>{col.name}</span>
+                              <span
+                                className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                                  role === 'measure'
+                                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                    : role === 'date'
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                    : role === 'identifier'
+                                    ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                                    : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                }`}
+                              >
+                                {role}
+                              </span>
+                            </div>
+                            {col.originalName !== col.name && (
+                              <div className="text-[10px] text-slate-400 font-normal">Orig: {col.originalName}</div>
+                            )}
+                          </td>
 
-                    {/* Sample values */}
-                    <td className="py-2.5 px-3 text-slate-600 max-w-xs truncate">
-                      {col.sampleValues.map((v) => String(v)).join(', ')}
-                    </td>
-
-                    {/* Unique count */}
-                    <td className="py-2.5 px-3 text-center font-mono text-slate-700">
-                      {col.uniqueCount}
-                    </td>
-
-                    {/* Missing count */}
-                    <td className="py-2.5 px-3 text-center">
-                      {col.missingCount > 0 ? (
-                        <span className="text-amber-700 font-semibold">
-                          {col.missingCount} ({Math.round((col.missingCount / audit.totalRows) * 100)}%)
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">0</span>
-                      )}
-                    </td>
-
-                    {/* PII Redaction Toggle & Method */}
-                    <td className="py-2 px-3 min-w-[170px]">
-                      <div className="flex flex-col gap-1">
-                        <label className="flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(col.isPII && col.piiRedactionMethod && col.piiRedactionMethod !== 'none')}
-                            onChange={(e) => {
-                              const checked = e.target.checked;
-                              onUpdateColumn(idx, {
-                                isPII: checked,
-                                piiRedactionMethod: checked ? (col.piiRedactionMethod || 'mask') : 'none',
-                                piiType: checked ? (col.piiType || 'custom') : undefined,
-                              });
-                            }}
-                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
-                          />
-                          <span className={`text-[11px] font-semibold ${col.isPII ? 'text-blue-800' : 'text-slate-600'}`}>
-                            {col.isPII ? 'Redact (PII)' : 'Flag as PII'}
-                          </span>
-                        </label>
-
-                        {col.isPII && (
-                          <div className="flex items-center gap-1 mt-0.5">
+                          {/* Classification Dropdown */}
+                          <td className="py-2 px-3">
                             <select
-                              value={col.piiRedactionMethod || 'mask'}
+                              value={col.userType}
                               onChange={(e) =>
                                 onUpdateColumn(idx, {
-                                  piiRedactionMethod: e.target.value as PiiRedactionMethod,
+                                  userType: e.target.value as ColumnDataType,
+                                  isUncertain: false,
                                 })
                               }
-                              className="text-[10px] py-0.5 px-1 rounded border border-blue-300 bg-blue-50/50 text-blue-900 font-medium focus:outline-none"
+                              className="w-full text-xs py-1 px-2 rounded border border-slate-300 bg-white font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
                             >
-                              <option value="mask">Mask (j***@...)</option>
-                              <option value="hash">Hash (SHA-256)</option>
-                              <option value="redact_label">[REDACTED]</option>
+                              {DATA_TYPES.map((dt) => (
+                                <option key={dt.type} value={dt.type}>
+                                  {dt.label}
+                                </option>
+                              ))}
                             </select>
-                            {col.sampleValues[0] && (
-                              <span
-                                title={`Preview: ${redactCellValue(col.sampleValues[0], col.piiRedactionMethod || 'mask', col.piiType)}`}
-                                className="text-[10px] px-1 py-0.5 rounded bg-slate-100 text-slate-600 font-mono max-w-[80px] truncate"
-                              >
-                                {redactCellValue(col.sampleValues[0], col.piiRedactionMethod || 'mask', col.piiType)}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </td>
+                          </td>
 
-                    {/* Uncertainty & Status */}
-                    <td className="py-2.5 px-4">
-                      {col.isUncertain ? (
-                        <div className="flex items-center gap-1.5 text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200">
-                          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                          <span className="text-[11px]">{col.uncertaintyReason || 'Unclear semantic type'}</span>
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-emerald-700 text-[11px] font-medium">
-                          <CheckCircle2 className="w-3 h-3" /> Confirmed
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          {/* Unit input */}
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={col.unit}
+                              onChange={(e) => onUpdateColumn(idx, { unit: e.target.value })}
+                              placeholder="e.g. $, kg, %"
+                              className="w-20 text-xs py-1 px-2 rounded border border-slate-300 bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                            />
+                          </td>
+
+                          {/* Sample values */}
+                          <td className="py-2.5 px-3 text-slate-600 max-w-xs truncate font-mono text-[11px]">
+                            {col.sampleValues.map((v) => String(v)).join(', ')}
+                          </td>
+
+                          {/* Cardinality count */}
+                          <td className="py-2.5 px-3 text-center">
+                            <span className="font-mono text-slate-800 font-semibold">{col.uniqueCount}</span>
+                            <span className="text-[10px] text-slate-400 block">
+                              {col.distinctPercentage !== undefined ? `${col.distinctPercentage}% unique` : 'distinct'}
+                            </span>
+                          </td>
+
+                          {/* Completeness & Missing bar */}
+                          <td className="py-2.5 px-3 min-w-[120px]">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-[11px]">
+                                {col.missingCount === 0 ? (
+                                  <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> 100%
+                                  </span>
+                                ) : (
+                                  <span className="text-amber-700 font-bold">
+                                    {col.missingCount} blank ({missingPct}%)
+                                  </span>
+                                )}
+                              </div>
+                              <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${
+                                    completeness >= 98
+                                      ? 'bg-emerald-500'
+                                      : completeness >= 75
+                                      ? 'bg-amber-500'
+                                      : 'bg-rose-500'
+                                  }`}
+                                  style={{ width: `${completeness}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* PII Redaction Toggle & Method */}
+                          <td className="py-2 px-3 min-w-[150px]">
+                            <div className="flex flex-col gap-1">
+                              <label className="flex items-center gap-1.5 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(col.isPII && col.piiRedactionMethod && col.piiRedactionMethod !== 'none')}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    onUpdateColumn(idx, {
+                                      isPII: checked,
+                                      piiRedactionMethod: checked ? (col.piiRedactionMethod || 'mask') : 'none',
+                                      piiType: checked ? (col.piiType || 'custom') : undefined,
+                                    });
+                                  }}
+                                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
+                                />
+                                <span className={`text-[11px] font-semibold ${col.isPII ? 'text-blue-800' : 'text-slate-600'}`}>
+                                  {col.isPII ? 'Redact (PII)' : 'Flag PII'}
+                                </span>
+                              </label>
+
+                              {col.isPII && (
+                                <div className="flex items-center gap-1 mt-0.5">
+                                  <select
+                                    value={col.piiRedactionMethod || 'mask'}
+                                    onChange={(e) =>
+                                      onUpdateColumn(idx, {
+                                        piiRedactionMethod: e.target.value as PiiRedactionMethod,
+                                      })
+                                    }
+                                    className="text-[10px] py-0.5 px-1 rounded border border-blue-300 bg-blue-50/50 text-blue-900 font-medium focus:outline-none"
+                                  >
+                                    <option value="mask">Mask (j***@...)</option>
+                                    <option value="hash">Hash (SHA-256)</option>
+                                    <option value="redact_label">[REDACTED]</option>
+                                  </select>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Uncertainty & Status Caveats */}
+                          <td className="py-2.5 px-4 min-w-[170px]">
+                            <div className="space-y-1">
+                              {col.isUncertain ? (
+                                <div className="flex items-start gap-1.5 text-amber-800 bg-amber-50 p-1.5 rounded border border-amber-200 text-[10px]">
+                                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-600 mt-0.5" />
+                                  <span>{col.uncertaintyReason || 'Unclear semantic type'}</span>
+                                </div>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-emerald-700 text-[11px] font-medium">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Confirmed
+                                </span>
+                              )}
+
+                              {col.inconsistencies && col.inconsistencies.length > 0 && (
+                                <div className="space-y-0.5">
+                                  {col.inconsistencies.map((inc, i) => (
+                                    <div key={i} className="text-[10px] text-amber-800 bg-amber-50/80 px-1.5 py-0.5 rounded border border-amber-200">
+                                      ⚠️ {inc}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

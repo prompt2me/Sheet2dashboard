@@ -60,7 +60,6 @@ export function cleanNumericValue(val: any): {
   }
 
   // Strip non-numeric characters except minus and decimal point
-  // Note: Handle comma as thousand separator vs decimal
   let cleaned = str.replace(/[^\d.-]/g, '');
 
   // Check for European comma decimal (e.g. 1.250,50 -> 1250.50)
@@ -105,24 +104,30 @@ export function isValidDate(val: any): boolean {
   // Exclude pure numbers e.g. "2024" which might be year or regular int
   if (/^\d{1,4}$/.test(s)) return false;
 
-  // Standard date patterns: YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY, Mon DD YYYY
+  // Standard date patterns: YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY, Mon DD YYYY, Fiscal Qs
+  if (/^Q[1-4]\s+\d{4}$/i.test(s) || /^\d{4}-Q[1-4]$/i.test(s)) return true;
+
   const d = new Date(s);
   return !isNaN(d.getTime()) && d.getFullYear() > 1950 && d.getFullYear() < 2100;
 }
 
 /**
- * Classify a column based on name, values, patterns
+ * Classify a column based on name, values, patterns, and BI analytical semantics
  */
 export function classifyColumn(name: string, values: any[], index: number): ColumnProfile {
+  const totalCount = values.length;
   const nonNulls = values.filter((v) => v !== null && v !== undefined && String(v).trim() !== '');
   const totalNonNull = nonNulls.length;
-  const missingCount = values.length - totalNonNull;
+  const missingCount = totalCount - totalNonNull;
+  const missingPercentage = totalCount > 0 ? Math.round((missingCount / totalCount) * 1000) / 10 : 0;
 
   const sampleValues = nonNulls.slice(0, 5);
   const uniqueSet = new Set(nonNulls.map((v) => String(v).trim().toLowerCase()));
   const uniqueCount = uniqueSet.size;
+  const distinctPercentage = totalNonNull > 0 ? Math.round((uniqueCount / totalNonNull) * 1000) / 10 : 0;
 
   const lowerName = name.toLowerCase().trim();
+  const inconsistencies: string[] = [];
 
   // Unit detection from column name (e.g. "Weight (kg)", "Revenue ($)", "Growth %")
   let unit = '';
@@ -152,13 +157,19 @@ export function classifyColumn(name: string, values: any[], index: number): Colu
   let booleanMatches = 0;
   let currencySymbolsFound = new Set<string>();
   let hasPercentSign = 0;
+  let negativeCount = 0;
+  let whitespaceCount = 0;
 
   let minNum: number | undefined;
   let maxNum: number | undefined;
 
   for (const v of nonNulls) {
     const s = String(v).trim();
-    if (['true', 'false', 'yes', 'no', '0', '1'].includes(s.toLowerCase()) && uniqueCount <= 2) {
+    if (String(v) !== s) {
+      whitespaceCount++;
+    }
+
+    if (['true', 'false', 'yes', 'no', '0', '1', 'y', 'n', 'oui', 'non'].includes(s.toLowerCase()) && uniqueCount <= 2) {
       booleanMatches++;
     }
     if (isValidDate(v)) {
@@ -168,6 +179,7 @@ export function classifyColumn(name: string, values: any[], index: number): Colu
     const { numericValue, currency, isPercent } = cleanNumericValue(v);
     if (numericValue !== null) {
       numberMatches++;
+      if (numericValue < 0) negativeCount++;
       if (minNum === undefined || numericValue < minNum) minNum = numericValue;
       if (maxNum === undefined || numericValue > maxNum) maxNum = numericValue;
     }
@@ -175,11 +187,17 @@ export function classifyColumn(name: string, values: any[], index: number): Colu
     if (isPercent) hasPercentSign++;
   }
 
+  if (whitespaceCount > 0) {
+    inconsistencies.push(`${whitespaceCount} value(s) contain leading or trailing whitespace`);
+  }
+
   const dateRatio = totalNonNull > 0 ? dateMatches / totalNonNull : 0;
   const numRatio = totalNonNull > 0 ? numberMatches / totalNonNull : 0;
   const boolRatio = totalNonNull > 0 ? booleanMatches / totalNonNull : 0;
 
   let detectedType: ColumnDataType = 'unknown';
+  let biRole: 'dimension' | 'measure' | 'identifier' | 'date' | 'attribute' = 'dimension';
+  let classificationConfidence = 0.85;
   let isUncertain = false;
   let uncertaintyReason: string | undefined;
 
@@ -190,20 +208,29 @@ export function classifyColumn(name: string, values: any[], index: number): Colu
     lowerName.includes('uuid') ||
     lowerName.includes('sku') ||
     lowerName.includes('barcode') ||
+    lowerName.includes('reference') ||
+    lowerName.includes('key') ||
     (uniqueCount === totalNonNull && totalNonNull > 10 && numRatio < 0.9)
   ) {
     detectedType = 'identifier';
+    biRole = 'identifier';
+    classificationConfidence = 0.95;
   }
   // Rule 2: Date
   else if (
-    dateRatio > 0.7 ||
+    dateRatio > 0.6 ||
     lowerName.includes('date') ||
     lowerName.includes('timestamp') ||
     lowerName.includes('time') ||
     lowerName.includes('created_at') ||
-    lowerName.includes('updated_at')
+    lowerName.includes('updated_at') ||
+    lowerName.includes('period') ||
+    lowerName.includes('month') ||
+    lowerName.includes('year')
   ) {
     detectedType = 'date';
+    biRole = 'date';
+    classificationConfidence = 0.96;
   }
   // Rule 3: Currency
   else if (
@@ -219,10 +246,14 @@ export function classifyColumn(name: string, values: any[], index: number): Colu
     lowerName.includes('margin') ||
     lowerName.includes('budget') ||
     lowerName.includes('spend') ||
-    lowerName.includes('fee')
+    lowerName.includes('fee') ||
+    lowerName.includes('amount') ||
+    lowerName.includes('valuation')
   ) {
-    if (numRatio > 0.6) {
+    if (numRatio > 0.5) {
       detectedType = 'currency';
+      biRole = 'measure';
+      classificationConfidence = 0.98;
       if (!unit && currencySymbolsFound.size > 0) {
         unit = Array.from(currencySymbolsFound)[0];
       } else if (!unit) {
@@ -238,17 +269,22 @@ export function classifyColumn(name: string, values: any[], index: number): Colu
     lowerName.includes('percentage') ||
     lowerName.includes('pct') ||
     lowerName.includes('ratio') ||
-    lowerName.includes('share')
+    lowerName.includes('share') ||
+    lowerName.includes('growth')
   ) {
-    if (numRatio > 0.6) {
+    if (numRatio > 0.5) {
       detectedType = 'percentage';
+      biRole = 'measure';
       unit = '%';
+      classificationConfidence = 0.95;
     }
   }
   // Rule 5: Target
-  else if (lowerName.includes('target') || lowerName.includes('quota') || lowerName.includes('goal')) {
-    if (numRatio > 0.6) {
+  else if (lowerName.includes('target') || lowerName.includes('quota') || lowerName.includes('goal') || lowerName.includes('benchmark')) {
+    if (numRatio > 0.5) {
       detectedType = 'target';
+      biRole = 'measure';
+      classificationConfidence = 0.92;
     }
   }
   // Rule 6: Count / Integer
@@ -258,37 +294,59 @@ export function classifyColumn(name: string, values: any[], index: number): Colu
     lowerName.includes('qty') ||
     lowerName.includes('headcount') ||
     lowerName.includes('units') ||
-    lowerName.includes('volume')
+    lowerName.includes('volume') ||
+    lowerName.includes('orders')
   ) {
-    if (numRatio > 0.6) {
+    if (numRatio > 0.5) {
       detectedType = 'count';
+      biRole = 'measure';
       if (!unit) unit = 'units';
+      classificationConfidence = 0.94;
     }
   }
-  // Rule 7: General Numeric
+  // Rule 7: General Numeric Measure
   else if (numRatio > 0.75) {
     detectedType = 'numeric';
+    biRole = 'measure';
+    classificationConfidence = 0.90;
   }
-  // Rule 8: Boolean
+  // Rule 8: Boolean Flag
   else if (boolRatio > 0.8 && uniqueCount <= 2) {
     detectedType = 'boolean';
+    biRole = 'dimension';
+    classificationConfidence = 0.95;
   }
   // Rule 9: Categorical Dimension
-  else if (uniqueCount <= Math.max(15, totalNonNull * 0.4) && totalNonNull > 0) {
+  else if (uniqueCount <= Math.max(35, totalNonNull * 0.4) && totalNonNull > 0) {
     detectedType = 'categorical';
+    biRole = 'dimension';
+    classificationConfidence = 0.92;
   }
-  // Rule 10: Free text
+  // Rule 10: Free text attribute
   else {
     detectedType = 'text';
+    biRole = 'attribute';
+    classificationConfidence = 0.85;
+  }
+
+  // Detect logical inconsistencies
+  if (['count', 'quantity'].includes(detectedType) && negativeCount > 0) {
+    inconsistencies.push(`${negativeCount} negative count/quantity value(s) found`);
+  }
+  if (currencySymbolsFound.size > 1) {
+    inconsistencies.push(`Mixed currency symbols detected (${Array.from(currencySymbolsFound).join(', ')})`);
+  }
+  if (uniqueCount === 1 && totalNonNull > 3) {
+    inconsistencies.push('Zero-variance constant column (only 1 unique value)');
   }
 
   // Check uncertainty
   if (numRatio > 0.3 && numRatio < 0.8) {
     isUncertain = true;
-    uncertaintyReason = `Mixed text and numbers (${Math.round(numRatio * 100)}% numeric). Confirm whether this should be numeric or text.`;
+    uncertaintyReason = `Mixed text and numbers (${Math.round(numRatio * 100)}% numeric). Confirm whether this is a measure or dimension.`;
   } else if (detectedType === 'unknown' || (uniqueCount === totalNonNull && detectedType === 'categorical')) {
     isUncertain = true;
-    uncertaintyReason = `High cardinality with unclear semantic meaning.`;
+    uncertaintyReason = `High cardinality with unclear semantic role.`;
   }
 
   const piiCheck = detectPiiColumn(name, sampleValues);
@@ -303,6 +361,8 @@ export function classifyColumn(name: string, values: any[], index: number): Colu
     sampleValues,
     uniqueCount,
     missingCount,
+    missingPercentage,
+    distinctPercentage,
     min: minNum,
     max: maxNum,
     isUncertain,
@@ -313,11 +373,16 @@ export function classifyColumn(name: string, values: any[], index: number): Colu
     isPII: piiCheck.isPII,
     piiType: piiCheck.piiType,
     piiRedactionMethod: piiCheck.isPII ? 'mask' : 'none',
+    biRole,
+    inconsistencies,
+    classificationConfidence,
   };
 }
 
 /**
- * Conduct comprehensive data quality audit, mixed units analysis, and Z-score outlier detection
+ * Conduct comprehensive business intelligence data quality audit,
+ * detecting missing values, inconsistencies, mixed units, and Z-score outlier signals.
+ * Assigns one of 4 rigorous statuses: 'ready' | 'ready_with_caveats' | 'needs_cleaning' | 'unsafe'
  */
 export function runDataQualityAudit(
   rows: Record<string, any>[],
@@ -335,11 +400,13 @@ export function runDataQualityAudit(
   if (totalRows === 0) {
     return {
       status: 'unsafe',
-      statusReasons: ['The dataset has no rows.'],
+      statusReasons: ['Dataset contains 0 records. No business data available for analysis.'],
       totalRows: 0,
       totalColumns,
       duplicateRowCount: 0,
       missingCellsCount: 0,
+      completenessScore: 0,
+      overallHealthScore: 0,
       issues: [
         {
           id: 'empty_dataset',
@@ -347,12 +414,17 @@ export function runDataQualityAudit(
           severity: 'critical',
           message: 'Dataset contains 0 records.',
           count: 0,
-          recommendation: 'Please upload a dataset containing at least 2 rows of data.',
+          recommendation: 'Upload a populated dataset with at least 2 rows of transactional or dimensional data.',
         },
       ],
       anomalies: [],
       mixedUnitWarnings: [],
       hasSummaryRows: false,
+      analystVerdict: {
+        headline: 'Critical Failure: Dataset is Empty',
+        summary: 'Cannot perform BI modeling on an empty dataset.',
+        actionItems: ['Upload a valid CSV, XLSX, or table document.'],
+      },
     };
   }
 
@@ -377,17 +449,19 @@ export function runDataQualityAudit(
       id: 'duplicate_rows',
       type: 'duplicate_rows',
       severity,
-      message: `${duplicateRowCount} duplicate row(s) detected (${(dupRatio * 100).toFixed(1)}% of dataset).`,
+      message: `${duplicateRowCount} duplicate row(s) identified (${(dupRatio * 100).toFixed(1)}% of dataset).`,
       count: duplicateRowCount,
-      recommendation: 'Check whether repeated transactions are intentional or accidental duplicate exports.',
+      recommendation: 'Verify if duplicate transactions are intentional or redundant data export artifacts.',
     });
     if (dupRatio > 0.15) {
-      statusReasons.push(`High proportion of duplicate rows (${(dupRatio * 100).toFixed(1)}%).`);
+      statusReasons.push(`High duplicate row concentration: ${(dupRatio * 100).toFixed(1)}% of dataset consists of repeated records.`);
     }
   }
 
-  // 2. Missing values across columns
+  // 2. Missing Values Analysis
   let totalMissingCells = 0;
+  const totalCells = totalRows * totalColumns;
+
   columns.forEach((col) => {
     totalMissingCells += col.missingCount;
     if (col.missingCount > 0) {
@@ -401,16 +475,41 @@ export function runDataQualityAudit(
           severity,
           message: `Column "${col.name}" has ${col.missingCount} missing values (${(missRatio * 100).toFixed(1)}%).`,
           count: col.missingCount,
-          recommendation: `Formulas will skip or zero-fill missing values. Ensure key metrics are not skewed.`,
+          recommendation: 'Formulas will utilize zero-fill or explicit filter conditions to avoid skewing totals.',
         });
-        if (missRatio > 0.5 && ['currency', 'numeric', 'date'].includes(col.userType)) {
-          statusReasons.push(`Critical column "${col.name}" is over 50% blank.`);
+        if (missRatio > 0.45 && ['currency', 'numeric', 'date', 'identifier'].includes(col.userType)) {
+          statusReasons.push(`Critical column "${col.name}" has ${(missRatio * 100).toFixed(1)}% missing values.`);
         }
       }
     }
   });
 
-  // 3. Numbers Stored as Text & Inconsistent casing / leading spaces
+  const completenessScore = totalCells > 0 ? Math.round(((totalCells - totalMissingCells) / totalCells) * 1000) / 10 : 0;
+
+  // 3. Inconsistent Casing across Categorical Dimensions
+  columns.forEach((col) => {
+    if (['categorical', 'text'].includes(col.userType)) {
+      const rawValues = rows.map((r) => r[col.name]).filter((v) => v !== null && v !== undefined && String(v).trim() !== '');
+      const uniqueCased = new Set(rawValues.map((v) => String(v).trim()));
+      const uniqueLower = new Set(rawValues.map((v) => String(v).trim().toLowerCase()));
+
+      if (uniqueCased.size > uniqueLower.size) {
+        const diff = uniqueCased.size - uniqueLower.size;
+        issues.push({
+          id: `casing_${col.name}`,
+          column: col.name,
+          type: 'inconsistent_spelling',
+          severity: 'warning',
+          message: `Column "${col.name}" contains ${diff} casing variant(s) (e.g., capitalization differences in category labels).`,
+          count: diff,
+          recommendation: 'Categorical normalization will reconcile casing so pivot tables do not fracture categories.',
+        });
+        statusReasons.push(`Inconsistent casing in "${col.name}" creates duplicate category groupings in pivot summaries.`);
+      }
+    }
+  });
+
+  // 4. Numbers Stored as Text & Whitespace Inconsistencies
   columns.forEach((col) => {
     let leadingTrailingSpaces = 0;
     let numbersStoredAsText = 0;
@@ -437,7 +536,7 @@ export function runDataQualityAudit(
         severity: 'info',
         message: `Column "${col.name}" has ${leadingTrailingSpaces} values with leading or trailing whitespace.`,
         count: leadingTrailingSpaces,
-        recommendation: 'Automated TRIM() cleaning is applied during Excel data table creation.',
+        recommendation: 'Automated TRIM() cleaning is applied during Excel data table creation to ensure formula joins work.',
       });
     }
 
@@ -449,15 +548,15 @@ export function runDataQualityAudit(
         severity: 'info',
         message: `Column "${col.name}" contains numeric values formatted with strings or symbols.`,
         count: numbersStoredAsText,
-        recommendation: 'Clean numeric conversion will be written to the clean Data table with native formatting.',
+        recommendation: 'Clean numeric conversion will be written to the clean Data table with native cell formatting.',
       });
     }
   });
 
-  // 4. Mixed Units Rule Check (NON-NEGOTIABLE CORE PHILOSOPHY)
+  // 5. Mixed Units Rule Enforcement (NON-NEGOTIABLE CORE PHILOSOPHY)
   columns.forEach((col) => {
     if (col.hasMixedUnits && col.detectedCurrencies && col.detectedCurrencies.length > 1) {
-      const warn = `Column "${col.name}" has mixed currencies (${col.detectedCurrencies.join(', ')}). Never sum amounts across different currencies!`;
+      const warn = `Column "${col.name}" contains mixed currencies (${col.detectedCurrencies.join(', ')}). Never sum amounts across different currencies!`;
       mixedUnitWarnings.push(warn);
       issues.push({
         id: `mixed_curr_${col.name}`,
@@ -466,19 +565,17 @@ export function runDataQualityAudit(
         severity: 'critical',
         message: warn,
         count: col.detectedCurrencies.length,
-        recommendation: 'Filter or split analysis by currency before aggregating totals.',
+        recommendation: 'Segment aggregates by currency code or apply currency conversion before aggregating grand totals.',
       });
-      statusReasons.push(`Mixed currencies detected in "${col.name}". Summing without currency filter is invalid.`);
+      statusReasons.push(`Mixed currencies detected in "${col.name}". Summing without currency filter is mathematically invalid.`);
     }
   });
 
-  // 5. Outliers and Z-Score Anomalies (signals, never silently deleted)
-  // Find a categorical column (e.g. Region, Category, Product) if any, and numeric measures
+  // 6. Outliers and Z-Score Anomalies (signals, never silently deleted)
   const catCol = columns.find((c) => c.userType === 'categorical');
   const numericCols = columns.filter((c) => ['numeric', 'currency', 'count'].includes(c.userType));
 
   numericCols.forEach((mCol) => {
-    // Extract valid numbers
     const cleanVals: { rowIndex: number; val: number; groupKey: string }[] = [];
     rows.forEach((r, idx) => {
       const { numericValue } = cleanNumericValue(r[mCol.name]);
@@ -489,7 +586,6 @@ export function runDataQualityAudit(
     });
 
     if (cleanVals.length >= 5) {
-      // 1. Global Measure-Level Z-Score
       const totalCount = cleanVals.length;
       const globalMean = cleanVals.reduce((acc, curr) => acc + curr.val, 0) / totalCount;
       const globalVariance =
@@ -504,7 +600,6 @@ export function runDataQualityAudit(
               ? `${item.groupKey} (Row ${item.rowIndex + 1})`
               : `Row ${item.rowIndex + 1}`;
 
-            // Prevent duplicate anomaly entries for the same row & measure
             if (!anomalies.some((a) => a.rowIndex === item.rowIndex && a.measureColumn === mCol.name)) {
               anomalies.push({
                 rowIndex: item.rowIndex,
@@ -523,7 +618,7 @@ export function runDataQualityAudit(
         });
       }
 
-      // 2. Group-Level Z-Score for categories with >= 4 items
+      // Group-level Z-Scores
       const groups = new Map<string, typeof cleanVals>();
       cleanVals.forEach((item) => {
         const list = groups.get(item.groupKey) || [];
@@ -574,9 +669,10 @@ export function runDataQualityAudit(
       recommendation:
         'Anomalies are flagged in the Detail & Anomaly sheet for audit. They are preserved, not deleted.',
     });
+    statusReasons.push(`${anomalies.length} statistical outlier(s) (|z| >= 2.5) detected. Highlighted in Detail audit sheet.`);
   }
 
-  // 6. Summary Rows in Source
+  // 7. Embedded Summary / Total Rows
   if (summaryRowsDetected.length > 0) {
     issues.push({
       id: 'summary_rows_isolated',
@@ -586,30 +682,73 @@ export function runDataQualityAudit(
       count: summaryRowsDetected.length,
       recommendation: 'Raw data is maintained cleanly so Excel formula aggregates do not double-count.',
     });
+    statusReasons.push(`${summaryRowsDetected.length} source total/summary row(s) isolated to prevent double-counting.`);
   }
 
-  // Determine overall Quality Status
+  // Calculate Overall Data Health Score (0 to 100%)
+  let healthScore = 100;
+  if (duplicateRowCount > 0) healthScore -= Math.min(15, (duplicateRowCount / totalRows) * 50);
+  healthScore -= Math.max(0, (100 - completenessScore) * 0.5);
+  if (mixedUnitWarnings.length > 0) healthScore -= 30;
+  if (anomalies.length > 0) healthScore -= Math.min(10, anomalies.length * 2);
+  const casingIssues = issues.filter((i) => i.type === 'inconsistent_spelling' && i.severity === 'warning');
+  if (casingIssues.length > 0) healthScore -= 10;
+  const overallHealthScore = Math.max(10, Math.min(100, Math.round(healthScore)));
+
+  // Strict Assignment of the 4 Mandated Statuses:
+  // 'Ready' | 'Ready with caveats' | 'Needs cleaning' | 'Unsafe for interpretation'
   let status: QualityStatus = 'ready';
   const hasCritical = issues.some((i) => i.severity === 'critical');
-  const hasWarning = issues.some((i) => i.severity === 'warning');
+  const criticalBlankColumns = columns.some((c) => c.missingPercentage && c.missingPercentage > 50 && ['currency', 'numeric', 'identifier'].includes(c.userType));
 
-  if (hasCritical || statusReasons.length >= 2) {
+  if (hasCritical || criticalBlankColumns || totalRows < 2) {
     status = 'unsafe';
-  } else if (hasWarning || statusReasons.length > 0) {
-    status = 'ready_with_caveats';
-  } else if (issues.length > 3) {
+  } else if (casingIssues.length > 0 || duplicateRowCount > 0 || issues.filter((i) => i.severity === 'warning').length > 1) {
     status = 'needs_cleaning';
+  } else if (anomalies.length > 0 || issues.some((i) => i.severity === 'warning') || completenessScore < 98) {
+    status = 'ready_with_caveats';
   } else {
     status = 'ready';
   }
 
   if (statusReasons.length === 0) {
     if (status === 'ready') {
-      statusReasons.push('Data passed integrity, column typing, and consistency checks.');
+      statusReasons.push('Data passed integrity, column typing, completeness, and consistency checks.');
     } else if (status === 'ready_with_caveats') {
       statusReasons.push('Dataset is suitable for dashboarding with noted caveats and anomaly flags.');
     }
   }
+
+  // Generate Business Intelligence Analyst Verdict & Action Plan
+  const actionItems: string[] = [];
+  if (summaryRowsDetected.length > 0) {
+    actionItems.push('Isolated embedded total rows to prevent double-counting in SUM/SUMIFS formulas');
+  }
+  if (mixedUnitWarnings.length > 0) {
+    actionItems.push('Enforced Mixed Units Rule: Split calculations by currency/unit to avoid aggregating incomparable amounts');
+  }
+  if (casingIssues.length > 0) {
+    actionItems.push('Normalize dimension casing to consolidate identical business entities');
+  }
+  if (anomalies.length > 0) {
+    actionItems.push(`Audited ${anomalies.length} statistical anomaly signal(s) with |z| >= 2.5 in Detail sheet`);
+  }
+  if (actionItems.length === 0) {
+    actionItems.push('Data integrity verified: Zero blockers detected for formula-driven dashboard compilation');
+  }
+
+  const analystVerdict = {
+    headline:
+      status === 'ready'
+        ? 'Verified Clean: Executive Dashboard Ready'
+        : status === 'ready_with_caveats'
+        ? 'Ready with Analytical Caveats'
+        : status === 'needs_cleaning'
+        ? 'Data Cleaning Recommended Before Modeling'
+        : 'Critical Integrity Alert: Unsafe for Direct Interpretation',
+    summary: `Business intelligence audit completed across ${totalRows} rows and ${totalColumns} columns with an overall data health score of ${overallHealthScore}% and completeness of ${completenessScore}%.`,
+    actionItems,
+  };
 
   return {
     status,
@@ -618,10 +757,13 @@ export function runDataQualityAudit(
     totalColumns,
     duplicateRowCount,
     missingCellsCount: totalMissingCells,
+    completenessScore,
+    overallHealthScore,
     issues,
-    anomalies: anomalies.slice(0, 50), // keep top 50 anomalies for audit UI
+    anomalies: anomalies.slice(0, 50),
     mixedUnitWarnings,
     hasSummaryRows: summaryRowsDetected.length > 0,
     summaryRowsDetected,
+    analystVerdict,
   };
 }

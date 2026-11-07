@@ -72,8 +72,15 @@ async function runTests() {
   const dateCol = cols.find((c) => c.name === 'Date');
   assert(dateCol?.userType === 'date', 'Classifies Date column as date');
 
+  const idCol = classifyColumn('Transaction_ID', ['TX-1001', 'TX-1002', 'TX-1003'], 0);
+  assert(idCol?.userType === 'identifier', 'Classifies Transaction_ID as identifier');
+
+  const catCol = cols.find((c) => c.name === 'Product_Category');
+  assert(catCol?.userType === 'categorical', 'Classifies Product_Category as categorical');
+
   const auditResult = runDataQualityAudit(parsedSales.rows, cols);
   assert(auditResult.status === 'ready' || auditResult.status === 'ready_with_caveats', 'Sales data audit passes with clean or caveat status');
+  assert(auditResult.statusReasons.length > 0, 'Audit result provides detailed status reasons');
 
   // Test Mixed Units Rule on Messy Inventory
   const messyCsv = SAMPLE_DATASETS[1].data;
@@ -85,6 +92,14 @@ async function runTests() {
   assert(messyAudit.anomalies.length > 0, 'Detects extreme statistical outlier (STL-999 Titanium Bar)');
   const spikeAnomaly = messyAudit.anomalies.find((a) => a.value >= 70000);
   assert(Boolean(spikeAnomaly && spikeAnomaly.zScore > 2.5), 'Spike anomaly z-score > 2.5');
+
+  // Test 'needs_cleaning' and 'unsafe' statuses
+  const dupRows = [...parsedSales.rows, parsedSales.rows[0], parsedSales.rows[1], parsedSales.rows[2]];
+  const cleaningAudit = runDataQualityAudit(dupRows, cols);
+  assert(cleaningAudit.status === 'needs_cleaning' || cleaningAudit.status === 'ready_with_caveats', 'Assigns needs_cleaning or caveat for duplicate rows');
+
+  const emptyAudit = runDataQualityAudit([], cols);
+  assert(emptyAudit.status === 'unsafe', 'Assigns unsafe status for empty dataset');
 
   // PHASE 2.5: PII REDACTION & GDPR PRIVACY COMPLIANCE
   console.log('\nPhase 2.5: PII Detection, Redaction & GDPR Masking');

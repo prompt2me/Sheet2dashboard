@@ -16,6 +16,7 @@ import { parseDelimitedText, parseExcelWorkbook, parseTextOrMarkdown, validateJo
 import { SAMPLE_DATASETS, SampleDataset } from '../utils/sampleDatasets';
 import { OcrExtractionData } from '../types/dashboard';
 import { AppLanguage, getTranslation } from '../utils/i18n';
+import { compressImageForOcr } from '../utils/imageCompressor';
 
 interface StepUploadProps {
   onDataLoaded: (
@@ -81,30 +82,41 @@ export const StepUpload: React.FC<StepUploadProps> = ({ onDataLoaded, onOcrLoade
     if (!failedImage) return;
     setIsLoading(true);
     setErrorMessage(null);
-    setLoadingMessage('Retrying vision OCR extraction...');
+    setLoadingMessage('Optimizing & retrying vision OCR extraction...');
     try {
+      const compressed = await compressImageForOcr(failedImage.base64, 1600, 0.85);
+
       const res = await fetch('/api/ocr-extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          imageBase64: failedImage.base64,
-          mimeType: failedImage.mimeType,
+          imageBase64: compressed.base64,
+          mimeType: compressed.mimeType,
         }),
       });
-      const result = await res.json();
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || 'OCR table extraction failed');
+
+      const responseText = await res.text();
+      let result: any = null;
+      try {
+        result = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        result = null;
       }
+
+      if (!res.ok || !result || !result.success) {
+        throw new Error(result?.error || 'OCR service returned a non-JSON response');
+      }
+
       setFailedImage(null);
-      onOcrLoaded(result.extraction, failedImage.base64);
+      onOcrLoaded(result.extraction, compressed.base64);
     } catch (err: any) {
       const msg = String(err.message || '');
-      if (msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand')) {
+      if (msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand') || msg.includes('unavailable')) {
         setErrorMessage(
-          'The AI vision model is currently experiencing high demand (503). You can click "Open Review Grid" below to work with your image right now, or upload a CSV/XLSX directly.'
+          'The AI vision model is currently experiencing high demand. Click "Open Review Grid with Image" below to view your photo side-by-side with an interactive table editor, or upload CSV/XLSX directly.'
         );
       } else {
-        setErrorMessage(`OCR Extraction Notice: ${msg}`);
+        setErrorMessage(`OCR Extraction Notice: ${msg}. You can click "Open Review Grid with Image" to inspect and edit your table directly, or upload CSV, TSV, or XLSX.`);
       }
     } finally {
       setIsLoading(false);
@@ -119,50 +131,57 @@ export const StepUpload: React.FC<StepUploadProps> = ({ onDataLoaded, onOcrLoade
     try {
       const fileNameLower = file.name.toLowerCase();
 
-      // Case 1: Image file (Run OCR Vision Extraction)
+      // Case 1: Image file (Run Optimized OCR Vision Extraction)
       if (
         file.type.startsWith('image/') ||
         ['.png', '.jpg', '.jpeg', '.webp'].some((ext) => fileNameLower.endsWith(ext))
       ) {
-        setLoadingMessage('Processing image with vision tabular model...');
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const base64Data = reader.result as string;
+        setLoadingMessage('Compressing and analyzing image with tabular vision model...');
+
+        try {
+          const compressed = await compressImageForOcr(file, 1600, 0.85);
           setFailedImage({
-            base64: base64Data,
-            mimeType: file.type || 'image/png',
+            base64: compressed.base64,
+            mimeType: compressed.mimeType,
             name: file.name,
           });
 
+          const res = await fetch('/api/ocr-extract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageBase64: compressed.base64,
+              mimeType: compressed.mimeType,
+            }),
+          });
+
+          const responseText = await res.text();
+          let result: any = null;
           try {
-            const res = await fetch('/api/ocr-extract', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                imageBase64: base64Data,
-                mimeType: file.type || 'image/png',
-              }),
-            });
-            const result = await res.json();
-            if (!res.ok || !result.success) {
-              throw new Error(result.error || 'OCR table extraction failed');
-            }
-            setFailedImage(null);
-            onOcrLoaded(result.extraction, base64Data);
-          } catch (err: any) {
-            const msg = String(err.message || '');
-            if (msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand')) {
-              setErrorMessage(
-                'The AI vision model is currently experiencing high demand (503). You can click "Open Review Grid" to input or adjust cells directly alongside your image, or retry in a moment.'
-              );
-            } else {
-              setErrorMessage(`OCR Extraction Notice: ${msg}. You can also upload CSV, TSV, or XLSX directly.`);
-            }
-          } finally {
-            setIsLoading(false);
+            result = responseText ? JSON.parse(responseText) : null;
+          } catch {
+            result = null;
           }
-        };
-        reader.readAsDataURL(file);
+
+          if (!res.ok || !result || !result.success) {
+            const errDetail = result?.error || (res.status === 413 ? 'Image too large for network' : 'OCR service returned invalid response');
+            throw new Error(errDetail);
+          }
+
+          setFailedImage(null);
+          onOcrLoaded(result.extraction, compressed.base64);
+        } catch (err: any) {
+          const msg = String(err.message || '');
+          if (msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand')) {
+            setErrorMessage(
+              'The AI vision model is currently experiencing temporary high demand (503). Click "Open Review Grid with Image" to inspect and edit your table directly alongside your photo.'
+            );
+          } else {
+            setErrorMessage(`OCR Extraction Notice: ${msg}. You can click "Open Review Grid with Image" below or upload CSV/XLSX directly.`);
+          }
+        } finally {
+          setIsLoading(false);
+        }
         return;
       }
 
